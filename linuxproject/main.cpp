@@ -1,37 +1,53 @@
-#include <iostream>
-#include <opencv2/opencv.hpp>
-#include <thread>
-#include "SocketServer.h"
-#include "ServoControl.h"
+#include "VideoHandler.h"
 #include "EnvironmentSensors.h"
-
-// 假设以下函数已经在其他文件中定义
-void videoThread(cv::VideoCapture& cap);
-void soundThread();
-void temperatureThread();
-void servoControlThread();
+#include "ServoControl.h"
+#include "SocketServer.h"
+#include <thread>
+#include <Python.h>
 
 int main() {
-    cv::VideoCapture cap(0);
-    if (!cap.isOpened()) {
-        std::cerr << "Error opening camera!" << std::endl;
-        return -1;
+    // 初始化所有模块
+    VideoHandler videoHandler;
+    EnvironmentSensors sensors;
+    ServoControl servoControl;
+    SocketServer socketServer;
+
+    // 启动辅助线程1：视频捕获和推理
+    std::thread videoCaptureThread(&VideoHandler::startCapture, &videoHandler);
+    // 读取传感器数据
+    std::thread sensorThread([]() {
+        while (true) {
+            sensors.readTemperature();
+            sensors.readSoundLevel();
+            std::this_thread::sleep_for(std::chrono::seconds(1));  // 每秒读取一次
+        }
+    });
+
+    // 处理客户端命令
+    std::thread socketThread(&SocketServer::startServer, &socketServer);
+    
+    // 主线程：显示视频流
+    cv::Mat frame;
+    while (true) {
+        frame = videoHandler.getLatestFrame();  // 假设VideoHandler有这个方法
+        if (!frame.empty()) {
+            cv::imshow("Video Stream", frame);
+            if (cv::waitKey(1) == 'q') {
+                break;
+            }
+        }
     }
 
-    initializeServos();
+    // 停止所有线程和服务
+    videoHandler.stopCapture();
+    socketServer.stopServer();  
 
-    // 创建并启动线程
-    std::thread camThread(videoThread, std::ref(cap));
-    std::thread sndThread(soundThread);
-    std::thread tempThread(temperatureThread);
-    std::thread servoThread(servoControlThread);
-
-    // 主线程可以继续执行其他任务，或者只是等待其他线程完成
-    camThread.join();
-    sndThread.join();
-    tempThread.join();
-    servoThread.join();
+    videoCaptureThread.join();
+    detectionThread.join();
+    sensorThread.join();
+    socketThread.join();
 
     return 0;
 }
+
 

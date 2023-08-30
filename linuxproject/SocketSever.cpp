@@ -11,7 +11,7 @@
 int server_fd, new_socket;
 struct sockaddr_in address;
 int epoll_fd;
-struct epoll_event ev, events[10];  // 10 is just an arbitrary number for this example
+struct epoll_event ev, events[10];  
 
 void initializeSocketServer() {
     // 创建 socket 文件描述符
@@ -116,7 +116,7 @@ void handleConnections() {
                 // 客户端连接关闭
                 close(events[n].data.fd);
             } else {
-                // 
+                
                 handleClientCommand(buffer);
             }
         }
